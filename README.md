@@ -1,3 +1,43 @@
+# Tinybar Local — personal fork
+
+A planned expansion of [Tinybar](https://github.com/ThiloReintjes/tinybar) that brings local model
+setup, selection, inference checks, and usage into its native macOS dashboard, alongside the
+subscription tracking Tinybar already provides.
+
+**Status: planning for owner review.** This fork currently contains upstream Tinybar plus the
+architecture and milestone plan. Local model management, the companion API, and the expanded
+dashboard are not implemented. Start with [project.md](project.md).
+
+## Planned components
+
+| Component | Responsibility |
+|---|---|
+| Tinybar menu bar and native dashboard | Existing subscription views plus models, setup, settings, tests, activity, and usage |
+| Opt-in local companion service | Model registry, verified setup, runtime ownership, inference API, scheduling, and request records |
+| Runtime adapters | Existing llama.cpp servers first, then Kokoro ONNX; Ollama, MLX, and speech transcription as later integrations |
+| Usage and tracing integrations | Reuse Tinybar subscription history and the existing local Langfuse instance; preserve source attribution |
+| Project clients | OCR Review Lab and other apps use the common API while keeping their own workflows and evidence |
+
+The menu bar app remains lightweight. Local inference runs outside its process. Subscription
+credentials remain read-only and are never forwarded to model runtimes. The OCR lab retains
+experiments, retries, scoring, and golden data. See [ownership and architecture](project.md#architecture).
+
+## Review and development
+
+- Fork: [naik-ai/tinybar](https://github.com/naik-ai/tinybar); `origin` points here.
+- Upstream: [ThiloReintjes/tinybar](https://github.com/ThiloReintjes/tinybar); `upstream` tracks it.
+- Plan: [milestones and acceptance checks](project.md#milestones).
+- Implementation begins after review of the plan. No running model has been moved or reconfigured.
+- Packaging must establish a separate bundle identity, data directory, and update channel before a
+  fork build is launched. The inherited scripts still build upstream's identity; do not install or
+  launch that build alongside your current Tinybar yet.
+
+The documentation below describes the inherited upstream app. Its install links install upstream,
+not this fork; its performance figures are upstream measurements. The proposed local features
+require the architecture decisions and new measurements listed in project.md.
+
+---
+
 <p align="center"><img src="docs/icon.png" alt="" width="128"></p>
 
 # Tinybar
