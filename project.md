@@ -1,8 +1,18 @@
 # Tinybar Local project
 
-Status: initial architecture and milestone plan, awaiting owner review. No local-model feature code.
+Status: kickoff prepared; architecture review and implementation remain pending. No local-model feature code.
 Owner: Jay. Review date: 16 November 2026. Upstream base: `4492996` (Tinybar 0.15.0).
 The installed Tinybar inspected on this Mac is 0.14.2; compatibility cannot be assumed from the fork version.
+
+## Current work
+
+- Done: fork, initial README/architecture/milestone plan, shared AGENTS.md, Claude entry pointer and
+  [kickoff agenda / first task](docs/kickoff.md).
+- Now: review the scope and start M1.1, fork identity/data/update isolation, in a Tinybar project session.
+- Next: subscription baseline and native dashboard design, then M2 contracts/discovery.
+- Running: no implementation or background task from this initialization.
+- Decisions: owner, in session, chose the Tinybar fork with a local companion; requested kickoff and
+  agent setup on 16 November 2026. Detailed design, API and storage choices remain as marked below.
 
 ## Outcome and scope
 
@@ -163,7 +173,8 @@ poll in the menu bar process. Show stale/disconnected data with its last observe
 <a id="milestones"></a>
 ## Milestones
 
-Only M0 documentation is complete. Every implementation item below is planned and unchecked.
+M0 documentation and agent setup are complete; its owner review remains open. Every implementation
+item below is planned and unchecked.
 Each milestone ends with a reviewable result and evidence; dependencies run in order.
 
 ### M0 — Initialize and review
@@ -171,6 +182,7 @@ Each milestone ends with a reviewable result and evidence; dependencies run in o
 - [x] Fork upstream into `naik-ai/tinybar`, clone under `/Users/jaynaik/src/tinybar`, retain upstream remote.
 - [x] Inspect upstream targets, credential policy, usage store, build identity and existing dashboard.
 - [x] Update README and record architecture, current inventory, boundaries and milestone checklist.
+- [x] Add shared AGENTS.md, CLAUDE.md entry pointer and kickoff agenda with a bounded first task.
 - [ ] Owner reviews this plan, scope and component choices before implementation.
 
 ### M1 — Safe fork foundation

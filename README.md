@@ -4,9 +4,12 @@ A planned expansion of [Tinybar](https://github.com/ThiloReintjes/tinybar) that 
 setup, selection, inference checks, and usage into its native macOS dashboard, alongside the
 subscription tracking Tinybar already provides.
 
-**Status: planning for owner review.** This fork currently contains upstream Tinybar plus the
+**Status: kickoff prepared for owner review.** This fork currently contains upstream Tinybar plus the
 architecture and milestone plan. Local model management, the companion API, and the expanded
 dashboard are not implemented. Start with [project.md](project.md).
+
+For a fresh agent session, read [AGENTS.md](AGENTS.md) and the
+[kickoff agenda and first task](docs/kickoff.md).
 
 ## Planned components
 
