@@ -51,9 +51,13 @@ final class StatsWindowController: NSObject, NSWindowDelegate {
         presence.visible = true
         occlusion = NotificationCenter.default.addObserver(
             forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
-        ) { [weak self] note in
-            let visible = (note.object as? NSWindow)?.occlusionState.contains(.visible) ?? false
-            MainActor.assumeIsolated { self?.presence.visible = visible }
+        ) { [weak self] _ in
+            // Delivered on the main queue; read the window's state inside the main actor (Swift 6.1 on CI
+            // refuses the read from the observer's Sendable closure).
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.presence.visible = self.window?.occlusionState.contains(.visible) ?? false
+            }
         }
         window.makeKeyAndOrderFront(nil)
     }
