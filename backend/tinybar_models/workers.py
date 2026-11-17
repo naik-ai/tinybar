@@ -540,22 +540,34 @@ class Manager:
             deadline = started + self.setting(m, "readyTimeoutSeconds")
             try:
                 w.port = read_port(report_r, w.proc, deadline, self.clock, lambda: w.state != "starting")
+                last = None
                 while True:
                     if w.state != "starting":
                         raise RuntimeError("stopped while starting")
                     code = w.proc.poll()
                     if code is not None:
                         raise RuntimeError(f"exited with code {code} before it was ready")
-                    if probe(w.port, self.worker_key)[0] == 200:
+                    last = probe(w.port, self.worker_key)[0]
+                    if last == 200:
                         break
                     if self.clock() > deadline:
                         raise TimeoutError()
                     time.sleep(self.poll_s)
             except TimeoutError:
-                raise RuntimeError(f"was not ready within {self.setting(m, 'readyTimeoutSeconds')} s; stopped it")
+                limit = self.setting(m, "readyTimeoutSeconds")
+                if w.port is None:
+                    raise RuntimeError(f"did not report its port within {limit} s; stopped it")
+                raise RuntimeError(f"was not ready within {limit} s (its port {w.port} last answered "
+                                   f"{('HTTP ' + str(last)) if last else 'nothing'}); stopped it")
         except Exception as e:
             why = str(e) if isinstance(e, RuntimeError) else f"failed to start ({type(e).__name__})"
             log.warning("%s %s", m["name"], why)
+            try:  # the worker's own last words, for whoever reads the gateway log (no content: workers log none)
+                tail = (paths.logs(self.env) / f"{m['name']}.log").read_text(errors="replace")[-1500:]
+                if tail.strip():
+                    log.warning("%s log tail:\n%s", m["name"], tail)
+            except OSError:
+                pass
             with self.lock:
                 w.error = f"model '{m['name']}' worker {why}; see its log (GET /api/logs?source={m['name']})"
                 self._detach(w)
