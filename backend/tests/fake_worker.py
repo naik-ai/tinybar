@@ -26,7 +26,7 @@ import signal
 import sys
 import threading
 import time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 
 from tinybar_models import wire
 
@@ -132,7 +132,7 @@ def main():
                                               "finish_reason": "stop"}],
                                  "usage": {"prompt_tokens": 7, "completion_tokens": 3, "total_tokens": 10}})
 
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), H)
+    server = wire.LoopbackHTTPServer(("127.0.0.1", args.port), H)
     wire.report_port(server.server_address[1])
     faulthandler.cancel_dump_traceback_later()
     server.serve_forever()

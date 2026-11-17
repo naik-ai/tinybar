@@ -11,6 +11,7 @@ import json
 import os
 import re
 import secrets
+import socketserver
 import sys
 import threading
 import time
@@ -332,9 +333,20 @@ def make_handler(key: str, routes: dict, health=_ok):
     return Handler
 
 
+class LoopbackHTTPServer(ThreadingHTTPServer):
+    """ThreadingHTTPServer without the reverse DNS lookup: HTTPServer.server_bind calls socket.getfqdn(host),
+    which can stall for a long time where name resolution is slow or offline (seen on CI runners: a worker
+    never got to report its port). A loopback server has no use for its host's fully qualified name."""
+
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name, self.server_port = host, port
+
+
 def serve(host: str, port: int, key: str, routes: dict, health=_ok) -> ThreadingHTTPServer:
     check_loopback(host)
     check_key(key)
-    server = ThreadingHTTPServer((host, port), make_handler(key, routes, health))
+    server = LoopbackHTTPServer((host, port), make_handler(key, routes, health))
     report_port(server.server_address[1])
     return server

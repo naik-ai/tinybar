@@ -1487,3 +1487,22 @@ def test_partial_and_in_flight_are_request_filters(harness):
     assert h.request("GET", "/api/requests?outcome=partial")[0] == 200
     assert h.request("GET", "/api/requests?outcome=in_flight")[0] == 200
     assert h.request("GET", "/api/requests?outcome=interrupted")[0] == 200
+
+
+def test_no_server_waits_on_a_reverse_dns_lookup(monkeypatch):
+    """CI runners stalled in socket.getfqdn inside HTTPServer.server_bind; an offline Mac could too."""
+    from tinybar_models import wire
+
+    def stalled(*a, **k):
+        time.sleep(30)
+
+    monkeypatch.setattr(socket, "getfqdn", stalled)
+    started = time.monotonic()
+    worker = wire.serve("127.0.0.1", 0, KEY, {})
+    gw_server = gateway.Server(("127.0.0.1", 0), gateway.BaseHTTPRequestHandler)
+    try:
+        assert time.monotonic() - started < 2
+        assert worker.server_name == "127.0.0.1" and worker.server_port == worker.server_address[1]
+    finally:
+        worker.server_close()
+        gw_server.server_close()

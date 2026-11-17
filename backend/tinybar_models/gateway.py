@@ -676,7 +676,7 @@ def follow(p, since: int) -> dict:
             "rotated": rotated}
 
 
-class Server(ThreadingHTTPServer):
+class Server(wire.LoopbackHTTPServer):
     daemon_threads = False  # server_close() waits for every handler, so their ledger rows land before it closes
     block_on_close = True
     allow_reuse_address = True  # TIME_WAIT only; cli.serve also probes the port, so a live listener refuses the start
