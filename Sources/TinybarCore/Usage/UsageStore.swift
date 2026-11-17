@@ -39,7 +39,12 @@ public actor UsageStore {
     private let projects = ProjectResolver()
     private static let schemaVersion: Int64 = 9
 
-    public init(path: URL = Paths.appSupport.appendingPathComponent("usage.sqlite")) throws {
+    /// `upstreamData`: installed Tinybar's folder, which this migrating store never opens (ADR 0015).
+    public init(path: URL = Paths.appSupport.appendingPathComponent("usage.sqlite"),
+                upstreamData: URL = ForkIdentity.upstreamAppSupport) throws {
+        guard !ForkIdentity.isUpstreamData(path, upstream: upstreamData) else {
+            throw ProviderError.unexpected("Refusing to open installed Tinybar's database at \(path.path)")
+        }
         let db = try SQLiteDB(path: path.path)
         try db.transaction {
             try Self.migrate(db)

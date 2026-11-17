@@ -1,0 +1,35 @@
+{
+  "about": "Boxes Nemotron-3.5-Parse returned through nemotron_server.py on 17 Nov 2026 for the line drawn at pixel (60, 770) on two invented pages of different shape (scripts/model-proof/draw_invented_page.py, TOTAL_AT).",
+  "drawnAt": [
+    60,
+    770
+  ],
+  "pages": {
+    "invented-invoice": {
+      "size": [
+        1100,
+        1400
+      ],
+      "box": [
+        0.0518,
+        0.55,
+        0.21,
+        0.5719
+      ],
+      "blocks": 11
+    },
+    "invented-invoice-wide": {
+      "size": [
+        1800,
+        1000
+      ],
+      "box": [
+        0.0332,
+        0.7719,
+        0.1279,
+        0.7992
+      ],
+      "blocks": 14
+    }
+  }
+}

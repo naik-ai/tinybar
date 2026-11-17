@@ -1,4 +1,5 @@
 import AppKit
+import TinybarCore
 
 /// Accessory apps have no default menu. Native commands still need one for keyboard equivalents.
 @MainActor
@@ -6,8 +7,8 @@ enum AppMenu {
     static func make() -> NSMenu {
         let menu = NSMenu()
         let appItem = NSMenuItem()
-        let appMenu = NSMenu(title: "Tinybar")
-        appMenu.addItem(withTitle: "Quit Tinybar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let appMenu = NSMenu(title: ForkIdentity.appName)
+        appMenu.addItem(withTitle: "Quit \(ForkIdentity.appName)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         menu.addItem(appItem)
 

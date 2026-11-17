@@ -52,6 +52,12 @@ final class Settings {
         didSet { defaults.set(Array(loginFoldersOff), forKey: "loginFoldersOff") }
     }
 
+    /// Modelbar tracks coding subscriptions only when this is on (ADR 0017); off, it polls no
+    /// provider, reads no login and sends no Limit Alert. The installed Tinybar does that work.
+    var tracksSubscriptions: Bool {
+        didSet { if savesChanges { SubscriptionTracking.set(tracksSubscriptions, defaults) } }
+    }
+
     var launchAtLogin: Bool {
         didSet {
             guard launchAtLogin != oldValue else { return }
@@ -70,9 +76,10 @@ final class Settings {
         quietIncidents = QuietIncidents(defaults.dictionary(forKey: "quietIncidents") as? [String: Int] ?? [:])
         loginFoldersOff = Set(defaults.stringArray(forKey: "loginFoldersOff") ?? [])
         launchAtLogin = SMAppService.mainApp.status == .enabled
+        tracksSubscriptions = SubscriptionTracking.isOn(defaults)
 
-        // Launch at login is on by default: register once on first run.
-        if !defaults.bool(forKey: "didConfigureLaunchAtLogin") {
+        // Upstream registers at login once on first run; the fork never does by itself (ADR 0015).
+        if ForkIdentity.registersAtLoginOnFirstRun, !defaults.bool(forKey: "didConfigureLaunchAtLogin") {
             defaults.set(true, forKey: "didConfigureLaunchAtLogin")
             launchAtLogin = true
             applyLaunchAtLogin()

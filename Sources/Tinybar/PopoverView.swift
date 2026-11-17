@@ -109,7 +109,7 @@ struct PopoverView: View {
 
     private var asideTitle: String {
         switch page {
-        case .about: "How Tinybar counts"
+        case .about: "How \(ForkIdentity.appName) counts"
         case .subscription: subscription.displayName
         default: "Settings"
         }
@@ -392,7 +392,7 @@ private struct EmptyState: View {
             LimitRings(windows: [], provider: nil, lineWidth: 5)
                 .frame(width: 44, height: 44)
             Text("No subscriptions found").font(.system(size: 13, weight: .semibold))
-            Text("Sign in with `claude`, `codex` or `agy`, or open Cursor. Tinybar picks them up on its next check.")
+            Text("Sign in with `claude`, `codex` or `agy`, or open Cursor. \(ForkIdentity.appName) picks them up on its next check.")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -437,7 +437,7 @@ enum StaleText {
             "Login expired. To refresh it, \((hint ?? id.loginHint).replacingOccurrences(of: " once to refresh", with: " once"))."
         case .notConfigured:
             "Not signed in. To sign in, \((hint ?? id.loginHint).replacingOccurrences(of: " once to refresh", with: ""))."
-        case .rateLimited: "\(id.displayName) asked Tinybar to slow down. It tries again on the next check."
+        case .rateLimited: "\(id.displayName) asked \(ForkIdentity.appName) to slow down. It tries again on the next check."
         case let .network(message): "Couldn't reach \(id.displayName): \(message)"
         case let .unexpected(message): message
         }
@@ -1105,7 +1105,10 @@ private struct Footer: View {
             .keyboardShortcut("r")
             FooterButton(icon: "chart.bar.xaxis", label: "Stats") { model.openStats() }
                 .keyboardShortcut("s")
-            FooterButton(icon: "info.circle", label: "How Tinybar counts") {
+            // Opens the window only: the popover itself never asks the model gateway anything.
+            FooterButton(icon: "cpu", label: "Local models") { model.openLocalModels(.overview) }
+                .keyboardShortcut("l")
+            FooterButton(icon: "info.circle", label: "How \(ForkIdentity.appName) counts") {
                 select(page == .about ? .overview : .about)
             }
             .keyboardShortcut("i")
@@ -1113,7 +1116,7 @@ private struct Footer: View {
                 select(page == .settings || page == .subscription ? .overview : .settings)
             }
             .keyboardShortcut(",")
-            FooterButton(icon: "power", label: "Quit Tinybar") { NSApp.terminate(nil) }
+            FooterButton(icon: "power", label: "Quit \(ForkIdentity.appName)") { NSApp.terminate(nil) }
                 .keyboardShortcut("q")
         }
         .padding(.horizontal, 10)
@@ -1232,7 +1235,7 @@ private struct SettingsPage: View {
     var body: some View {
         @Bindable var settings = model.settings
         VStack(alignment: .leading, spacing: 18) {
-            SettingsSection("Subscriptions", footer: "Tinybar turns on each subscription it finds a login for.") {
+            SettingsSection("Subscriptions", footer: "\(ForkIdentity.appName) turns on each subscription it finds a login for.") {
                 ForEach(ProviderID.allCases, id: \.self) { id in
                     SubscriptionRow(model: model, id: id, first: id == ProviderID.allCases.first) { open(id) }
                 }
@@ -1258,7 +1261,9 @@ private struct SettingsPage: View {
             }
             HStack(spacing: 4) {
                 if let version = model.updater.current {
-                    Text("Tinybar \(version)").textSelection(.enabled)
+                    Text("\(ForkIdentity.appName) \(version)").textSelection(.enabled)
+                    Text("·")
+                    Text(ForkIdentity.credit).help("Modelbar is a personal fork of Tinybar (MIT). The licence notice is kept in LICENSE.")
                     Text("·")
                 }
                 Button("Report a bug") { NSWorkspace.shared.open(bugReportURL) }
@@ -1446,7 +1451,7 @@ private struct AccountsSection: View {
         if id == .copilot { parts.append("So is every user the Copilot CLI and gh are signed in as.") }
         parts.append("Add a login kept elsewhere under Other logins in Settings.")
         if id == .claude, model.isClaudeSwapInstalled {
-            parts.append("claude-swap may renew idle logins itself when Tinybar asks for their limits.")
+            parts.append("claude-swap may renew idle logins itself when \(ForkIdentity.appName) asks for their limits.")
         }
         return parts.joined(separator: " ")
     }
@@ -1461,12 +1466,12 @@ private struct OtherLoginsSection: View {
     var body: some View {
         SettingsSection(
             "Other logins",
-            footer: "For a login kept outside the folders Tinybar looks in, like another app's CODEX_HOME. Your coding agent can find them from the prompt.")
+            footer: "For a login kept outside the folders \(ForkIdentity.appName) looks in, like another app's CODEX_HOME. Your coding agent can find them from the prompt.")
         {
             ForEach(Array(model.addedFoldersWithoutLogin.enumerated()), id: \.element) { i, url in
                 AccountSourceRow(
                     id: nil, name: Paths.abbreviated(url),
-                    detail: Paths.isDefaultConfigDir(url) ? "A default login, read already" : "No login Tinybar can read here",
+                    detail: Paths.isDefaultConfigDir(url) ? "A default login, read already" : "No login \(ForkIdentity.appName) can read here",
                     first: i == 0)
                 {
                     RemoveButton { model.removeLoginFolder(url) }
@@ -1575,10 +1580,10 @@ private enum LoginFolderPicker {
             // A CLI's default folder can still hold another CLI's login.
             let held = AddedLoginFolders.providers(in: url)
             if held.isEmpty ? Paths.isDefaultConfigDir(url) : held.allSatisfy({ Paths.isDefaultConfigDir(url, of: $0) }) {
-                throw refusal("Tinybar already reads this login: it's a CLI's default one.")
+                throw refusal("\(ForkIdentity.appName) already reads this login: it's a CLI's default one.")
             }
             if held.isEmpty {
-                throw refusal("There's no login Tinybar can read in this folder. Choose the folder a CLI keeps its login in, like a CODEX_HOME.")
+                throw refusal("There's no login \(ForkIdentity.appName) can read in this folder. Choose the folder a CLI keeps its login in, like a CODEX_HOME.")
             }
         }
 

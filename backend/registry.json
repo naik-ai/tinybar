@@ -1,0 +1,324 @@
+{
+  "schemaVersion": 1,
+  "about": "Tinybar Local's model registry: one entry per model the gateway may serve or pull. Ported from Draftbook's services/models/catalogue.json (17 November 2026), whose MLX proof (draftbook-in docs/initiatives/003-model-platform/mlx-proof.md) set the capabilities and memory budgets. A model not listed here cannot be served or pulled.",
+  "memoryBudgetTotalMb": 49152,
+  "memoryNote": "memoryBudgetTotalMb bounds every loaded worker together, counted by each entry's memory.budgetMb; the gateway evicts least-recently-used idle unpinned workers to fit, else answers 503. Each worker holds its budget against its process's physical footprint (Metal buffers included). cacheLimitMb caps MLX's buffer cache within a request; clearCacheAfterRequest returns it after each.",
+  "defaults": {
+    "ttlSeconds": 600,
+    "concurrency": 1,
+    "queueLimit": 8,
+    "readyTimeoutSeconds": 600,
+    "availableByDefault": false
+  },
+  "workKinds": {
+    "read-page": "page image in, the page's text out",
+    "check-reading": "page or region image plus a reading in, a judgement of that reading out",
+    "extract-fields": "page text and/or image plus a JSON schema in, fields out",
+    "chat": "messages in, a chat reply out"
+  },
+  "serverKinds": {
+    "mlx-vlm": "mlx-vlm's own OpenAI-compatible server (tinybar_models.mlx_server: three routes behind the gate), one process per model",
+    "jev-wrapper": "tinybar_models.jev_server: the Jev classifier behind /v1/chat/completions; one page and its blocks in, {\"scores\": [{block, score}]} out",
+    "nemotron-wrapper": "tinybar_models.nemotron_server: Nemotron's fixed-prompt reader, its tagged output parsed into {text, blocks}"
+  },
+  "models": [
+    {
+      "name": "nemotron-parse",
+      "displayName": "Nemotron-3.5-Parse",
+      "work": [
+        "read-page"
+      ],
+      "weights": {
+        "original": {
+          "repo": "nvidia/Nemotron-3.5-Parse",
+          "revision": "62cb1e4ba153d113ff64aaf2be6e068c377cf53c",
+          "sha256": {
+            "model.safetensors": "81dd7609c589f3694ce75520c25af5010953231358de6aec4d03e8c6aac787e9"
+          }
+        },
+        "mlx": {
+          "repo": "geoHeil/Nemotron-3.5-Parse-MLX-bf16",
+          "revision": "d28803cbe9fa7359f982288adbeafa53e5ecbcb7"
+        },
+        "reuse": [
+          "original"
+        ],
+        "approxSizeGb": {
+          "original": 2.74,
+          "mlx": 1.27
+        },
+        "download": "original",
+        "note": "Served from the original weights only, now in the store at ~/Models/hf/hub/models--nvidia--Nemotron-3.5-Parse/snapshots/62cb1e4b… (moved there from the OCR lab's folder on 17 Nov 2026 at the owner's word; the lab path is a symlink to it). The mlx conversion is listed for reference only: not in reuse and not the download source, and its copy in the store was deleted on the owner's word, so no pull fetches it."
+      },
+      "server": {
+        "kind": "nemotron-wrapper",
+        "maxTokens": 8192
+      },
+      "memory": {
+        "budgetMb": 6144,
+        "cacheLimitMb": 1024,
+        "clearCacheAfterRequest": true
+      },
+      "capabilities": {
+        "imageInput": true,
+        "jsonSchemaOutput": false,
+        "boxes": true,
+        "instructions": "ignored",
+        "output": "one JSON object {text, blocks: [{class, box: [x1, y1, x2, y2] as page fractions, text}]}"
+      },
+      "fixedPrompt": "</s><s><predict_bbox><predict_classes><output_markdown><predict_text_in_pic>",
+      "licence": {
+        "original": {
+          "id": "OpenMDW-1.1 (weights, code); MIT (tokenizer)",
+          "commercialUse": "allowed",
+          "readFrom": "LICENSE at nvidia/Nemotron-3.5-Parse@62cb1e4b (the copy served), read 17 Nov 2026: 'permission is hereby granted, free of charge, to deal in the Model Materials without restriction'; conditions: keep the agreement and notices when distributing; rights end on a patent or copyright suit over the materials"
+        },
+        "mlx": {
+          "id": "OpenMDW-1.1 (weights, code); MIT (tokenizer)",
+          "commercialUse": "allowed",
+          "readFrom": "LICENSE at geoHeil/Nemotron-3.5-Parse-MLX-bf16 main: byte-identical (SHA256 3375384e…) to the original's"
+        }
+      },
+      "availableByDefault": true
+    },
+    {
+      "name": "minicpm-ocr",
+      "displayName": "MiniCPM-OCR 1.0",
+      "work": [
+        "read-page"
+      ],
+      "weights": {
+        "original": {
+          "repo": "openbmb/MiniCPM-OCR-1.0",
+          "revision": "883ca368d17335b9ce5aa6fef4d000ef0684fcaa",
+          "sha256": {
+            "model.safetensors": "83f4e433b044fd23f9ea7eb3acbc7d59e4fe11a1fdf3c3129b7021d0ab4f8fd4"
+          }
+        },
+        "mlx": {
+          "repo": "nativ-community/MiniCPM-OCR-1.0-bf16",
+          "revision": "e25a68a1434d6696b2ed98b4c6ef6746e1c7b405"
+        },
+        "reuse": [
+          "original"
+        ],
+        "approxSizeGb": {
+          "original": 2.62,
+          "mlx": 2.62
+        },
+        "download": "original",
+        "note": "Served from the Apache-2.0 original: mlx-vlm 0.7.12 loads its safetensors directly, no conversion step (17 Nov 2026). The nativ-community conversion is kept here as the alternative source only; it declares no licence and its cache was deleted."
+      },
+      "server": {
+        "kind": "mlx-vlm",
+        "maxTokens": 8192
+      },
+      "memory": {
+        "budgetMb": 6144,
+        "cacheLimitMb": 1024,
+        "clearCacheAfterRequest": true
+      },
+      "capabilities": {
+        "imageInput": true,
+        "jsonSchemaOutput": true,
+        "boxes": false,
+        "instructions": "honoured",
+        "output": "page text; one JSON object when response_format json_schema is sent"
+      },
+      "licence": {
+        "original": {
+          "id": "Apache-2.0",
+          "commercialUse": "allowed",
+          "readFrom": "README.md at openbmb/MiniCPM-OCR-1.0@883ca368 (read 17 Nov 2026), section License: 'Model weights, code, and documentation are released under the Apache License 2.0'; card metadata 'license: apache-2.0'. Apache-2.0 permits commercial use."
+        },
+        "mlx": {
+          "id": null,
+          "commercialUse": "unread",
+          "readFrom": "nativ-community/MiniCPM-OCR-1.0-bf16 declares no licence (no card metadata, no LICENSE file)"
+        }
+      },
+      "availableByDefault": true
+    },
+    {
+      "name": "jev",
+      "displayName": "MiniCPM-OCR-Jev (reading scorer)",
+      "work": [
+        "check-reading"
+      ],
+      "weights": {
+        "original": {
+          "repo": "openbmb/MiniCPM-OCR-Jev",
+          "revision": "a0ed278eb6aa1f333a711665ab610055a4a816ab",
+          "sha256": {
+            "model.safetensors": "6e8e43049340a9d18f711634dcc88eb5880a3cd69c852815e76d5de3aea28dcc"
+          }
+        },
+        "mlx": {
+          "repo": "nativ-community/MiniCPM-OCR-Jev-bf16",
+          "revision": "d874fb2b4a5966d6e32430da89e2f504d9527561"
+        },
+        "reuse": [
+          "original"
+        ],
+        "approxSizeGb": {
+          "original": 4.45,
+          "mlx": 4.45
+        },
+        "download": "original",
+        "note": "Served from the Apache-2.0 original: mlx-vlm 0.7.12 loads its safetensors directly, no conversion step (17 Nov 2026). The nativ-community conversion is kept here as the alternative source only; it declares no licence and its cache was deleted."
+      },
+      "server": {
+        "kind": "jev-wrapper"
+      },
+      "memory": {
+        "budgetMb": 8192,
+        "cacheLimitMb": 1024,
+        "clearCacheAfterRequest": true
+      },
+      "capabilities": {
+        "imageInput": true,
+        "jsonSchemaOutput": false,
+        "boxes": true,
+        "instructions": "ignored",
+        "output": "one JSON object {\"scores\": [{\"block\": n, \"score\": p}]}, one entry per block that has a box and a script the renderer can draw; p = P(block text consistent with its crop), 0..1"
+      },
+      "licence": {
+        "original": {
+          "id": "Apache-2.0",
+          "commercialUse": "allowed",
+          "readFrom": "README.md at openbmb/MiniCPM-OCR-Jev@a0ed278e (read 17 Nov 2026), section License: 'Model weights, code, and documentation are released under the Apache License 2.0'; card metadata 'license: apache-2.0'. Apache-2.0 permits commercial use."
+        },
+        "mlx": {
+          "id": null,
+          "commercialUse": "unread",
+          "readFrom": "nativ-community/MiniCPM-OCR-Jev-bf16 declares no licence (no card metadata, no LICENSE file)"
+        }
+      },
+      "needs": "block boxes from the reader (Nemotron gives them; MiniCPM-OCR does not)",
+      "availableByDefault": true
+    },
+    {
+      "name": "qwen3.5-27b",
+      "displayName": "Qwen3.5-27B (4-bit MLX)",
+      "work": [
+        "extract-fields",
+        "check-reading",
+        "chat"
+      ],
+      "weights": {
+        "original": {
+          "repo": "Qwen/Qwen3.5-27B",
+          "revision": "fc05daec18b0a78c049392ed2e771dde82bdf654"
+        },
+        "mlx": {
+          "repo": "mlx-community/Qwen3.5-27B-4bit",
+          "revision": "45797d2985a12c55e6473686e9ea91b95e959553",
+          "sha256": {
+            "model-00001-of-00003.safetensors": "19cea4e4dba56318d52d7a32844df29c191c2c8861108f970322af55fc996e36",
+            "model-00002-of-00003.safetensors": "ba1d802762939303e82e6808ca90e81cc2d94a958a0dafdf9ee211e8b24e0a85",
+            "model-00003-of-00003.safetensors": "31bba7a7e18308d2c9bfd53fe53a277fc2f3a4bc8d39d0995d792986cf134be4"
+          }
+        },
+        "reuse": [
+          "mlx"
+        ],
+        "approxSizeGb": {
+          "original": 55.59,
+          "mlx": 16.08
+        },
+        "download": "mlx"
+      },
+      "server": {
+        "kind": "mlx-vlm",
+        "maxTokens": 12000
+      },
+      "memory": {
+        "budgetMb": 22528,
+        "cacheLimitMb": 2048,
+        "clearCacheAfterRequest": true
+      },
+      "capabilities": {
+        "imageInput": true,
+        "jsonSchemaOutput": true,
+        "boxes": false,
+        "instructions": "honoured",
+        "output": "chat text; JSON constrained by response_format json_schema"
+      },
+      "licence": {
+        "original": {
+          "id": "Apache-2.0",
+          "commercialUse": "allowed",
+          "readFrom": "LICENSE file in Qwen/Qwen3.5-27B: Apache License 2.0 text"
+        },
+        "mlx": {
+          "id": "Apache-2.0",
+          "commercialUse": "allowed",
+          "readFrom": "model card metadata 'license: apache-2.0'; mlx-community/Qwen3.5-27B-4bit has no LICENSE file; Apache-2.0 permits commercial use"
+        }
+      },
+      "ttlSeconds": 300,
+      "availableByDefault": true
+    },
+    {
+      "name": "qwen3.5-4b",
+      "displayName": "Qwen3.5-4B (4-bit MLX), small vision chat",
+      "work": [
+        "check-reading",
+        "extract-fields",
+        "chat"
+      ],
+      "weights": {
+        "original": {
+          "repo": "Qwen/Qwen3.5-4B",
+          "revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a"
+        },
+        "mlx": {
+          "repo": "mlx-community/Qwen3.5-4B-MLX-4bit",
+          "revision": "32f3e8ecf65426fc3306969496342d504bfa13f3",
+          "sha256": {
+            "model.safetensors": "5fb9acd0246866381cf8c5c354c6db1019f6498eec4ccb4f5edcc71ffeacb2db"
+          }
+        },
+        "reuse": [
+          "mlx"
+        ],
+        "approxSizeGb": {
+          "original": 9.34,
+          "mlx": 3.06
+        },
+        "download": "mlx"
+      },
+      "server": {
+        "kind": "mlx-vlm",
+        "maxTokens": 8192
+      },
+      "memory": {
+        "budgetMb": 6144,
+        "cacheLimitMb": 1024,
+        "clearCacheAfterRequest": true
+      },
+      "capabilities": {
+        "imageInput": true,
+        "jsonSchemaOutput": true,
+        "boxes": false,
+        "instructions": "honoured",
+        "output": "chat text; JSON constrained by response_format json_schema"
+      },
+      "licence": {
+        "original": {
+          "id": "Apache-2.0",
+          "commercialUse": "allowed",
+          "readFrom": "LICENSE file in Qwen/Qwen3.5-4B: Apache License 2.0 text"
+        },
+        "mlx": {
+          "id": "Apache-2.0",
+          "commercialUse": "allowed",
+          "readFrom": "model card metadata 'license: apache-2.0'; mlx-community/Qwen3.5-4B-MLX-4bit has no LICENSE file; Apache-2.0 permits commercial use"
+        }
+      },
+      "availableByDefault": true
+    }
+  ],
+  "licenceRule": "Each weights source records its licence: id, commercialUse (allowed | not_allowed | unread) and where it was read. Real use is refused unless the source actually served is 'allowed'.",
+  "availabilityNote": "A model serves requests only while it is available: availableByDefault per entry, else defaults.availableByDefault (false: a new entry serves nothing until turned on), unless the owner turned it on or off (POST /api/models/<name>/available, kept in availability.json in the state folder). Availability loads nothing by itself."
+}

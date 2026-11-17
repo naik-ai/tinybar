@@ -54,7 +54,7 @@ func printLimits(browser: Bool, swap: Bool, optedIn: Bool) async {
         }
     }
     // The app's own settings hold the folders added there.
-    let added = AddedLoginFolders.urls(UserDefaults(suiteName: "com.tinybar.app") ?? .standard)
+    let added = AddedLoginFolders.urls(UserDefaults(suiteName: ForkIdentity.bundleIdentifier) ?? .standard)
     for folder in LoginFolders.find(added: added) where only == nil || only == folder.provider.rawValue {
         do {
             let s = try await folder.source.fetch()

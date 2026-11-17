@@ -1,0 +1,31 @@
+[project]
+name = "tinybar-models"
+version = "0.1.0"
+description = "Tinybar Local's model backend: one loopback gateway, OpenAI-compatible, MLX workers loaded on demand. No prompt, image or response content is stored."
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  # Pinned to the versions Draftbook's MLX proof used (draftbook-in services/models/uv.lock, 17 Nov 2026).
+  "mlx-vlm==0.7.12",
+  "mlx==0.32.4",
+  "huggingface-hub==2.4.0",
+]
+
+[project.scripts]
+tinybar-models = "tinybar_models.cli:main"
+
+[dependency-groups]
+dev = ["pytest==8.4.2", "pytest-timeout==2.4.0"]
+
+[build-system]
+requires = ["uv_build>=0.9,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "tinybar_models"
+module-root = ""
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# A test that hangs fails after 60 s with every thread's stack, instead of holding a CI job.
+timeout = 60
+timeout_method = "thread"

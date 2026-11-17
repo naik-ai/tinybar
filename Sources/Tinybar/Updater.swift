@@ -3,6 +3,7 @@ import Observation
 import TinybarCore
 
 /// Finds a newer Tinybar once a day and installs it through Homebrew (SPEC §11, ADR 0007).
+/// Off in the fork (ADR 0015): every entry point returns before it asks GitHub or runs Homebrew.
 ///
 /// Installing runs in two steps. While Tinybar stays open, the tap is pulled and the new zip
 /// downloaded, which is the slow part. Then a small script outlives Tinybar: it waits for it to
@@ -38,6 +39,8 @@ final class Updater {
     }
 
     init() {
+        // The fork never offers upstream's releases (ADR 0015): no check, no notice, no install.
+        guard ForkIdentity.selfUpdates else { return }
         // A failed swap leaves a marker for the relaunched old version to explain.
         if let reason = try? String(contentsOf: marker, encoding: .utf8) {
             try? FileManager.default.removeItem(at: marker)
@@ -74,7 +77,7 @@ final class Updater {
     /// Asks GitHub when `UpdateSchedule` says it's time. Returns a release seen for the first
     /// time, to notify about once.
     func checkIfDue(now: Date = Date()) async -> Release? {
-        guard let current, schedule.isDue(now: now, version: current) else { return nil }
+        guard ForkIdentity.selfUpdates, let current, schedule.isDue(now: now, version: current) else { return nil }
         schedule.attempt(at: now, version: current)
         guard let latest = try? await ReleaseCheck.latest() else { return nil }
         schedule.lastCheck = now
@@ -99,6 +102,7 @@ final class Updater {
 
     /// Homebrew, if Tinybar was installed with it.
     private var brew: String? {
+        guard ForkIdentity.selfUpdates else { return nil }
         let runningApp = Bundle.main.bundleURL.resolvingSymlinksInPath().standardizedFileURL
         for prefix in ["/opt/homebrew", "/usr/local"]
         where FileManager.default.isExecutableFile(atPath: "\(prefix)/bin/brew") {
@@ -118,7 +122,7 @@ final class Updater {
     }
 
     func install() {
-        guard let release else { return }
+        guard ForkIdentity.selfUpdates, let release else { return }
         if case .preparing = state { return }
         guard let brew else {
             // Not a Homebrew install: the release page has the zip.

@@ -3,9 +3,10 @@ import Foundation
 public enum Paths {
     public static var home: URL { FileManager.default.homeDirectoryForCurrentUser }
 
+    /// The fork's own data folder (ADR 0015), never installed Tinybar's.
     public static var appSupport: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let dir = base.appendingPathComponent("Tinybar", isDirectory: true)
+        let dir = base.appendingPathComponent(ForkIdentity.appSupportFolder, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
