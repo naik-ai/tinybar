@@ -80,7 +80,7 @@ private struct PlanColumn: View {
         if plan.value.usedPercent < PlanValue.minimumUsedPercent {
             return "This shows once you've used \(minimum)% of your weekly limit. You've used \(used)%."
         }
-        return "Tinybar can't work this out yet. Your plan changed this week, or your use this week isn't in your \(cli) logs."
+        return "\(ForkIdentity.appName) can't work this out yet. Your plan changed this week, or your use this week isn't in your \(cli) logs."
     }
 
     var body: some View {

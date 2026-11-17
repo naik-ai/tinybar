@@ -47,6 +47,9 @@ python3 -I Scripts/verify-grok.py          # Grok against the real CLI and a moc
 swift Scripts/make-icon.swift              # redraw Resources/AppIcon.icns and docs/icon.png
 .build/debug/Tinybar --snapshot out.png [--page <provider>|settings|settings/<provider>] [--accounts one|stack|many] [--backdrop] [--redact-projects]
 .build/debug/Tinybar --snapshot out.png --stats [--page commands|models|languages|plans] [--range week|month|all] [--model <id>] [--hover x,y]   # a Stats card
+python3 -I Tests/StandIn/standin_gateway.py serve --port 18990   # a stand-in model gateway with invented data (never 18900)
+Tests/StandIn/make-fake-backend.sh <dir>   # a backend folder whose tinybar-models runs the stand-in, for Start and Stop
+.build/debug/Tinybar --snapshot out.png --local [--address http://127.0.0.1:18990] [--key-file PATH] [--backend DIR] [--exercise-start] [--real] [--only NAME]   # Local models sections, offscreen
 ```
 
 `--snapshot` renders the popover to PNG in light and dark. `--accounts` stands in for several logins

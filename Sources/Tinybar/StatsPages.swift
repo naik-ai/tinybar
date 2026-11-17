@@ -10,6 +10,8 @@ struct PageTabs: View {
     let page: StatsPage
     let palette: StatsPalette
     let select: (StatsPage) -> Void
+    /// Off when nested under the window's own tabs, which hold ⌘1 to ⌘7.
+    var shortcuts = true
     @Namespace private var pill
     @State private var hovered: StatsPage?
 
@@ -30,8 +32,8 @@ struct PageTabs: View {
                         .contentShape(Capsule())
                 }
                 .buttonStyle(TabPress())
-                .keyboardShortcut(KeyEquivalent(Character(String(i + 1))), modifiers: .command)
-                .help("\(p.title) (⌘\(i + 1))")
+                .modifier(TabShortcut(index: i, on: shortcuts))
+                .help(shortcuts ? "\(p.title) (⌘\(i + 1))" : p.title)
                 .onHover { inside in
                     if inside { hovered = p } else if hovered == p { hovered = nil }
                 }
@@ -49,6 +51,20 @@ struct PageTabs: View {
                 .animation(.easeOut(duration: 0.1)) { label in
                     label.scaleEffect(configuration.isPressed ? 0.96 : 1)
                 }
+        }
+    }
+}
+
+/// ⌘1, ⌘2… for a tab, or no shortcut at all.
+private struct TabShortcut: ViewModifier {
+    let index: Int
+    let on: Bool
+
+    func body(content: Content) -> some View {
+        if on {
+            content.keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
+        } else {
+            content
         }
     }
 }

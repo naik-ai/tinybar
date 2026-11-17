@@ -59,7 +59,7 @@ struct CountingNotes: View {
         if !coverage.isEmpty {
             let parts = coverage.sorted { $0.key < $1.key }
                 .map { "\(StatsText.percent($0.value)) of \($0.key.displayName) tokens" }
-            text += " In \(phrase), the logs Tinybar could read hold \(parts.joined(separator: " and "))."
+            text += " In \(phrase), the logs \(ForkIdentity.appName) could read hold \(parts.joined(separator: " and "))."
         }
         return text + " Point at anything in Stats to see what it counts."
     }

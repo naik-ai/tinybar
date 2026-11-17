@@ -19,6 +19,15 @@ enum PopoverSnapshot {
         else { fail("Output directory does not exist.") }
         let model = AppModel(settings: Settings())
         Task { @MainActor in
+            // `--local` renders the Local models page's sections instead (LocalModelsSnapshot); it
+            // asks no subscription for its limits.
+            if args.contains("--local") { await LocalModelsSnapshot.run(model: model, out: out, args: args) }
+            // `--address URL --key-file PATH`: the popover's Local models list asks this gateway (for this run only).
+            if let a = args.firstIndex(of: "--address"), a + 1 < args.count {
+                var shown = ["localModels.address": args[a + 1]]
+                if let k = args.firstIndex(of: "--key-file"), k + 1 < args.count { shown["localModels.keyFile"] = args[k + 1] }
+                SnapshotDefaults.show(shown)
+            }
             // `--incident claude:partialOutage` stands in for a status page reporting one; a third
             // part, `:quiet`, shows it quieted.
             if let i = args.firstIndex(of: "--incident"), i + 1 < args.count {
@@ -38,20 +47,35 @@ enum PopoverSnapshot {
                 }
             }
             // `--menubar` renders the status item's icon at 4x, with and without an incident light.
+            // `--menubar` renders Modelbar's status-item glyph at 4x in each state, light and dark, as the
+            // menu bar tints a template image (ink on a light bar, white on a dark one).
             if args.contains("--menubar") {
+                let states: [(GatewayGlyph.State, String?)] = [
+                    (.stopped, nil), (.idle(busy: false), nil), (.idle(busy: true), nil),
+                    (.loaded(fraction: 0.29, busy: false), "2 · 9 GB"), (.loaded(fraction: 0.71, busy: true), "4 · 26 GB"), (.error, nil),
+                ]
                 for dark in [false, true] {
-                    var row: [NSImage] = []
-                    for alert in [nil, NSColor.systemOrange, .systemRed] {
-                        row.append(RingIcon.image(fraction: 0.62, label: "62%", tint: RingIcon.tint(.claude), dark: dark, alert: alert))
-                        row.append(RingIcon.image(fraction: 0.62, label: nil, tint: nil, dark: dark, alert: alert))
+                    let ink: NSColor = dark ? .white : .black
+                    let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize - 1, weight: .regular)
+                    let items: [NSImage] = states.map { state, text in
+                        let glyph = GatewayGlyph.image(state)
+                        let label = text.map { NSAttributedString(string: " " + $0, attributes: [.font: font, .foregroundColor: ink]) }
+                        let width = glyph.size.width + (label.map { ceil($0.size().width) } ?? 0)
+                        return NSImage(size: NSSize(width: width, height: glyph.size.height), flipped: false) { r in
+                            glyph.draw(in: NSRect(origin: .zero, size: glyph.size))
+                            ink.set()
+                            NSRect(origin: .zero, size: glyph.size).fill(using: .sourceAtop)
+                            label?.draw(at: NSPoint(x: glyph.size.width, y: (r.height - (label?.size().height ?? 0)) / 2))
+                            return true
+                        }
                     }
-                    let scale: CGFloat = 4, pad: CGFloat = 8
-                    let w = row.reduce(pad) { $0 + $1.size.width + pad }, h = (row.map(\.size.height).max() ?? 16) + 2 * pad
+                    let scale: CGFloat = 4, pad: CGFloat = 10
+                    let w = items.reduce(pad) { $0 + $1.size.width + pad }, h = (items.map(\.size.height).max() ?? 18) + 2 * pad
                     let canvas = NSImage(size: NSSize(width: w * scale, height: h * scale), flipped: false) { r in
                         (dark ? NSColor(white: 0.16, alpha: 1) : NSColor(white: 0.93, alpha: 1)).setFill()
                         r.fill()
                         var x = pad
-                        for img in row {
+                        for img in items {
                             img.draw(in: NSRect(x: x * scale, y: pad * scale, width: img.size.width * scale, height: img.size.height * scale))
                             x += img.size.width + pad
                         }
@@ -92,14 +116,14 @@ enum PopoverSnapshot {
                     if xy.count == 2 { StatsCard.snapshotHover = CGPoint(x: xy[0], y: xy[1]) }
                 }
                 // The window too, chrome included, as `<out>.window.png`.
-                UserDefaults.standard.set(range.rawValue, forKey: "statsRange")
+                SnapshotDefaults.show(["statsRange": range.rawValue])
                 let page = args.firstIndex(of: "--page").flatMap { $0 + 1 < args.count ? StatsPage(rawValue: args[$0 + 1]) : nil } ?? .overview
-                UserDefaults.standard.set(page.rawValue, forKey: "statsPage")
+                SnapshotDefaults.show(["statsPage": page.rawValue, "windowPage": WindowPage.subscriptions.rawValue])
                 let host = NSHostingView(rootView: StatsView(model: model, picked: picked))
                 let window = NSWindow(contentRect: NSRect(origin: .zero, size: host.fittingSize),
                                       styleMask: [.borderless], backing: .buffered, defer: false)
                 window.contentView = host
-                window.orderFrontRegardless()
+                SnapshotDefaults.placeOffscreen(window)
                 try? await Task.sleep(for: .milliseconds(900))
                 if StatsCard.snapshotHover != nil {
                     NotificationCenter.default.post(name: StatsCard.snapshotHoverNotification, object: nil)
@@ -152,7 +176,7 @@ enum PopoverSnapshot {
                 window.appearance = host.appearance
                 window.backgroundColor = .windowBackgroundColor
                 window.contentView = host
-                window.orderFrontRegardless()
+                SnapshotDefaults.placeOffscreen(window)
                 try? await Task.sleep(for: .milliseconds(600))
                 host.layoutSubtreeIfNeeded()
                 guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { fail("Couldn't render the popover.") }
@@ -254,5 +278,23 @@ private enum AccountsDemo {
             }
         }
         model.showForSnapshot(defaults: defaults, folders: folders, swap: swap, readings: readings)
+    }
+}
+
+/// Snapshots show a state without choosing it for anyone, and without putting anything on screen.
+@MainActor
+enum SnapshotDefaults {
+    private static var shown: [String: Any] = [:]
+
+    /// Values for this run only: the argument domain is read first and never saved.
+    static func show(_ values: [String: Any]) {
+        shown.merge(values) { $1 }
+        UserDefaults.standard.setVolatileDomain(shown, forName: UserDefaults.argumentDomain)
+    }
+
+    /// Far off every screen, behind everything, never key or main.
+    static func placeOffscreen(_ window: NSWindow) {
+        window.setFrameOrigin(NSPoint(x: -30_000, y: -30_000))
+        window.orderBack(nil)
     }
 }

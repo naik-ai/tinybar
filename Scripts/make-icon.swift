@@ -1,6 +1,7 @@
-// Draws Resources/AppIcon.icns: the menu bar ring, grown up. Two concentric rings, like a
-// Provider's rings in the popover: the outer (weekly) mostly left, the inner (5-hour) less so.
-// Run from the repo root: swift Scripts/make-icon.swift
+// Draws Resources/AppIcon.icns for Modelbar, the fork: upstream Tinybar's two rings, redrawn so the
+// two apps can't be mistaken for each other — a graphite body, green and violet rings and a filled
+// centre, the same mark as Modelbar's menu bar ring. (Upstream's own icon is a light body with
+// orange and blue rings.) Run from the repo root: swift Scripts/make-icon.swift
 import AppKit
 
 let size: CGFloat = 1024
@@ -58,22 +59,25 @@ func render() -> NSBitmapImageRep {
     let shape = CGPath(roundedRect: body, cornerWidth: 185, cornerHeight: 185, transform: nil)
     cg.saveGState()
     cg.setShadow(offset: CGSize(width: 0, height: -12), blur: 28, color: NSColor(white: 0, alpha: 0.3).cgColor)
-    cg.addPath(shape); cg.setFillColor(color(0xF4F5F8).cgColor); cg.fillPath()
+    cg.addPath(shape); cg.setFillColor(color(0x1C1F26).cgColor); cg.fillPath()
     cg.restoreGState()
 
     cg.saveGState()
     cg.addPath(shape); cg.clip()
     let bg = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB),
-                        colors: [color(0xFFFFFF).cgColor, color(0xE3E5EB).cgColor] as CFArray,
+                        colors: [color(0x343844).cgColor, color(0x15171D).cgColor] as CFArray,
                         locations: [0, 1])!
     cg.drawLinearGradient(bg, start: CGPoint(x: 0, y: body.maxY), end: CGPoint(x: 0, y: body.minY), options: [])
     // A bright rim where light catches the top edge.
-    cg.addPath(shape); cg.setStrokeColor(NSColor(white: 1, alpha: 0.9).cgColor); cg.setLineWidth(6); cg.strokePath()
+    cg.addPath(shape); cg.setStrokeColor(NSColor(white: 1, alpha: 0.18).cgColor); cg.setLineWidth(6); cg.strokePath()
 
-    ring(cg, radius: 262, width: 96, fraction: 0.74,
-         from: color(0xF2A06A), to: color(0xD9572F), track: color(0x1B1D24, 0.07))
-    ring(cg, radius: 142, width: 76, fraction: 0.42,
-         from: color(0x6AB6FF), to: color(0x2F6FE0), track: color(0x1B1D24, 0.07))
+    ring(cg, radius: 280, width: 92, fraction: 0.74,
+         from: color(0x7BE8BF), to: color(0x1FA67A), track: color(0xFFFFFF, 0.08))
+    ring(cg, radius: 170, width: 72, fraction: 0.42,
+         from: color(0xC3A6FF), to: color(0x7C4DE8), track: color(0xFFFFFF, 0.08))
+    // The filled centre: Modelbar's mark, as in its menu bar ring.
+    cg.setFillColor(color(0xF4F5F8).cgColor)
+    cg.fillEllipse(in: CGRect(x: size / 2 - 58, y: size / 2 - 58, width: 116, height: 116))
     cg.restoreGState()
 
     NSGraphicsContext.restoreGraphicsState()
@@ -100,10 +104,11 @@ for pt in [16, 32, 128, 256, 512] {
     try png(master, px: pt).write(to: iconset.appendingPathComponent("icon_\(pt)x\(pt).png"))
     try png(master, px: pt * 2).write(to: iconset.appendingPathComponent("icon_\(pt)x\(pt)@2x.png"))
 }
-try png(master, px: 1024).write(to: URL(fileURLWithPath: "docs/icon.png"))
+// docs/icon.png stays upstream's (README); Modelbar's preview goes beside it.
+try png(master, px: 1024).write(to: URL(fileURLWithPath: "docs/modelbar-icon.png"))
 
 let task = Process()
 task.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")
 task.arguments = ["-c", "icns", iconset.path, "-o", "Resources/AppIcon.icns"]
 try task.run(); task.waitUntilExit()
-print(task.terminationStatus == 0 ? "Wrote Resources/AppIcon.icns and docs/icon.png" : "iconutil failed")
+print(task.terminationStatus == 0 ? "Wrote Resources/AppIcon.icns and docs/modelbar-icon.png" : "iconutil failed")

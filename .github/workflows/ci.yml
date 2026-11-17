@@ -23,3 +23,22 @@ jobs:
         run: swift test
       - name: Build the app bundle
         run: ./Scripts/build-app.sh
+
+  backend:
+    # The local model backend (backend/): its pytest suite in the locked dev environment. No model, MLX
+    # computation or network is used by the tests (tests/conftest.py refuses any non-loopback connection);
+    # the network is only needed to install the locked packages. MLX's wheels are Apple-silicon only.
+    runs-on: macos-15
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.4"
+      - name: Install the locked environment
+        run: uv sync --locked
+      - name: Test
+        run: uv run --locked --offline pytest -q

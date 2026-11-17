@@ -8,6 +8,9 @@ import TinybarCore
 final class StatsWindowController: NSObject, NSWindowDelegate {
     private let model: AppModel
     private var window: NSWindow?
+    /// Whether the window can be seen; the Local models page polls only while it can.
+    private let presence = WindowPresence()
+    private var occlusion: NSObjectProtocol?
 
     init(model: AppModel) {
         self.model = model
@@ -19,13 +22,16 @@ final class StatsWindowController: NSObject, NSWindowDelegate {
             window.makeKeyAndOrderFront(nil)
             return
         }
-        let host = NSHostingController(rootView: StatsView(model: model))
-        host.sizingOptions = .preferredContentSize
+        let host = NSHostingController(rootView: StatsView(model: model, presence: presence))
+        // The content's size is the minimum, not a fixed size: the window can grow and go full screen,
+        // and the card stays centred on the canvas.
+        host.sizingOptions = .minSize
         let window = NSWindow(contentViewController: host)
-        window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+        window.collectionBehavior.insert(.fullScreenPrimary)
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.title = "Tinybar Stats"
+        window.title = "\(ForkIdentity.appName) Stats"
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.delegate = self
@@ -34,6 +40,7 @@ final class StatsWindowController: NSObject, NSWindowDelegate {
         window.setContentSize(host.view.fittingSize)
         host.view.layoutSubtreeIfNeeded()
         window.setContentSize(host.view.fittingSize)
+        window.contentMinSize = host.view.fittingSize
         window.center()
         window.setFrameAutosaveName("Stats")
         // Recover positions saved by the old zero-sized layout or a disconnected display.
@@ -41,16 +48,45 @@ final class StatsWindowController: NSObject, NSWindowDelegate {
             window.center()
         }
         self.window = window
+        presence.visible = true
+        occlusion = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
+        ) { [weak self] note in
+            let visible = (note.object as? NSWindow)?.occlusionState.contains(.visible) ?? false
+            MainActor.assumeIsolated { self?.presence.visible = visible }
+        }
         window.makeKeyAndOrderFront(nil)
     }
 
     func windowWillClose(_ notification: Notification) {
+        presence.visible = false
+        if let occlusion { NotificationCenter.default.removeObserver(occlusion) }
+        occlusion = nil
         // AppKit may retain the closed window. Free the name so the next one can restore it.
         window?.setFrameAutosaveName("")
         // Drop the SwiftUI tree with the window; the next open builds it fresh.
         window?.contentViewController = nil
         window = nil
     }
+}
+
+/// The window's pages, in its tab bar: the local models first, then subscriptions, then settings
+/// (ADR 0017). The subscription cards are one page with their own tabs.
+enum WindowPage: String, CaseIterable, Identifiable {
+    case overview, models, tryout = "try", activity, logs, subscriptions, settings
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .subscriptions: "Subscriptions"
+        default: localSection!.title
+        }
+    }
+
+    var localSection: LocalSection? { LocalSection(rawValue: rawValue) }
+
+    init(_ section: LocalSection) { self = WindowPage(rawValue: section.rawValue)! }
 }
 
 /// The Stats window's cards: the overview, and a closer look at one kind of activity each.
@@ -70,10 +106,13 @@ enum StatsPage: String, CaseIterable, Identifiable {
     }
 }
 
-/// Window chrome around the card: the pages, the range picker and the copy button sit in the title
-/// bar row, outside what gets copied.
+/// The main window: the tab bar, then a local models section, the subscription cards, or settings.
 struct StatsView: View {
     let model: AppModel
+    var presence = WindowPresence()
+    /// Snapshots hand in the local workspace's state; the window builds its own.
+    var localState: LocalModelsWorkspaceState?
+    @AppStorage("windowPage") private var windowRaw = WindowPage.overview.rawValue
     @AppStorage("statsRange") private var rangeRaw = StatsRange.month.rawValue
     @AppStorage("statsPage") private var pageRaw = StatsPage.overview.rawValue
     /// The one model the card is filtered to, if any. Not remembered: the window opens on all models.
@@ -87,19 +126,71 @@ struct StatsView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(model: AppModel, picked: String? = nil) {
+    init(model: AppModel, picked: String? = nil, presence: WindowPresence = WindowPresence(), localState: LocalModelsWorkspaceState? = nil) {
         self.model = model
+        self.presence = presence
+        self.localState = localState
         _picked = State(initialValue: picked)
     }
 
     private var range: StatsRange { StatsRange(rawValue: rangeRaw) ?? .month }
     private var page: StatsPage { StatsPage(rawValue: pageRaw) ?? .overview }
+    private var windowPage: WindowPage { WindowPage(rawValue: windowRaw) ?? .overview }
 
     var body: some View {
         let palette = StatsPalette(scheme)
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                PageTabs(page: page, palette: palette, select: show)
+                WindowTabs(page: windowPage, palette: palette) { windowRaw = $0.rawValue }
+                Spacer()
+            }
+            // Clear of the window buttons.
+            .padding(.leading, 84)
+            .padding(.trailing, 20)
+            .frame(height: 52)
+
+            if windowPage == .subscriptions {
+                subscriptions(palette)
+            } else {
+                LocalModelsPage(model: model, presence: presence, preset: localState, section: windowPage.localSection ?? .overview) {
+                    windowRaw = WindowPage($0).rawValue
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(palette.canvas)
+        // Window menu, Mission Control and VoiceOver name the window (the title bar itself is hidden).
+        .background(WindowTitle(text: ForkIdentity.appName))
+        // AppStorage can deliver an update outside the button action's transaction. Tie motion
+        // to the rendered selection so clicks, shortcuts and preference updates animate alike.
+        .animation(reduceMotion ? .easeInOut(duration: 0.2) : .smooth(duration: 0.35), value: page)
+        .onExitCommand { picked = nil }
+        .task(id: "\(rangeRaw)|\(picked ?? "")|\(model.lastUpdated?.timeIntervalSince1970 ?? 0)|\(model.isRefreshing)|\(windowPage == .subscriptions)") {
+            // Read only on the Subscriptions page.
+            guard windowPage == .subscriptions, !model.isRefreshing else { return }
+            let next = await model.statsSummary(range, model: picked)
+            guard !Task.isCancelled else { return }
+            guard let next else { loadFailed = true; return }
+            loadFailed = false
+            // A model not used in the new range has nothing to show: fall back to all models.
+            if let p = picked, !next.models.contains(where: { $0.name == p }) {
+                picked = nil
+                return
+            }
+            // Everything stays in place and the figures move to their new values.
+            withAnimation(summary == nil || reduceMotion ? nil : .smooth(duration: 0.35)) {
+                summary = next
+                summaryRevision += 1
+            }
+        }
+    }
+
+    /// Upstream's cards, under their own tabs, range and copy button.
+    @ViewBuilder
+    private func subscriptions(_ palette: StatsPalette) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                PageTabs(page: page, palette: palette, select: show, shortcuts: false)
                 Spacer()
                 Picker("Range", selection: $rangeRaw) {
                     ForEach(StatsRange.allCases) { Text($0.label).tag($0.rawValue) }
@@ -118,37 +209,18 @@ struct StatsView: View {
                 .keyboardShortcut("c")
                 .help("Copy this card as an image, ready to paste")
             }
-            // Clear of the window buttons.
-            .padding(.leading, 84)
-            .padding(.trailing, 20)
-            .frame(height: 52)
-
+            .padding(.horizontal, 20)
+            .frame(height: 40)
+            if !model.settings.tracksSubscriptions {
+                SubscriptionsOff(model: model, palette: palette) { windowRaw = WindowPage.settings.rawValue }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 6)
+            }
             StatsCard(summary: summary, importing: model.importProgress, palette: palette, page: page, plans: model.plans,
                       forward: forward, loadFailed: loadFailed, summaryRevision: summaryRevision) { name in
                 picked = picked == name ? nil : name
             }
-        }
-        .background(palette.canvas)
-        // AppStorage can deliver an update outside the button action's transaction. Tie motion
-        // to the rendered selection so clicks, shortcuts and preference updates animate alike.
-        .animation(reduceMotion ? .easeInOut(duration: 0.2) : .smooth(duration: 0.35), value: page)
-        .onExitCommand { picked = nil }
-        .task(id: "\(rangeRaw)|\(picked ?? "")|\(model.lastUpdated?.timeIntervalSince1970 ?? 0)|\(model.isRefreshing)") {
-            guard !model.isRefreshing else { return }
-            let next = await model.statsSummary(range, model: picked)
-            guard !Task.isCancelled else { return }
-            guard let next else { loadFailed = true; return }
-            loadFailed = false
-            // A model not used in the new range has nothing to show: fall back to all models.
-            if let p = picked, !next.models.contains(where: { $0.name == p }) {
-                picked = nil
-                return
-            }
-            // Everything stays in place and the figures move to their new values.
-            withAnimation(summary == nil || reduceMotion ? nil : .smooth(duration: 0.35)) {
-                summary = next
-                summaryRevision += 1
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -538,7 +610,7 @@ private struct Header: View {
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             Mark(palette: palette).frame(width: 22, height: 22)
-            Text("Tinybar").font(.system(size: 17, weight: .semibold)).foregroundStyle(palette.ink)
+            Text(ForkIdentity.appName).font(.system(size: 17, weight: .semibold)).foregroundStyle(palette.ink)
             // The copied image says which card it is; the overview is just Tinybar.
             if page != .overview {
                 Text(page.title).font(.system(size: 17, weight: .regular)).foregroundStyle(palette.ink3)
@@ -1333,5 +1405,75 @@ enum StatsText {
         return StatsTip(
             id: "model:\(m.name)", title: ModelName.display(m.name), rows: rows,
             note: picked ? "Click to show all models again." : "Click to show only this model.")
+    }
+}
+
+/// Sets its window's title, which a hosting view's SwiftUI can't name directly.
+private struct WindowTitle: NSViewRepresentable {
+    let text: String
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async { view.window?.title = text }
+    }
+}
+
+/// The top tab bar: ⌘1 to ⌘7.
+struct WindowTabs: View {
+    let page: WindowPage
+    let palette: StatsPalette
+    let select: (WindowPage) -> Void
+    @Namespace private var pill
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(Array(WindowPage.allCases.enumerated()), id: \.element) { i, p in
+                if p == .subscriptions || p == .settings {
+                    Rectangle().fill(palette.ink.opacity(0.12)).frame(width: 1, height: 14).padding(.horizontal, 4)
+                }
+                Button { select(p) } label: {
+                    Text(p.title)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(p == page ? palette.canvas : palette.ink2)
+                        .padding(.horizontal, 11)
+                        .frame(height: 24)
+                        .background {
+                            if p == page { Capsule().fill(palette.ink).matchedGeometryEffect(id: "pill", in: pill) }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(KeyEquivalent(Character(String(i + 1))), modifiers: .command)
+                .help("\(p.title) (⌘\(i + 1))")
+                .accessibilityAddTraits(p == page ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background(Capsule().fill(palette.faint))
+    }
+}
+
+/// With subscription tracking off: why the cards may be empty, and what to do.
+private struct SubscriptionsOff: View {
+    let model: AppModel
+    let palette: StatsPalette
+    let openSettings: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "info.circle").foregroundStyle(palette.ink2)
+            Text("Modelbar doesn't track your coding subscriptions: your installed Tinybar does. These cards show only what Modelbar has counted itself.")
+                .font(.system(size: 11.5)).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            Button("Read once now") { model.readSubscriptionsOnce() }
+                .help("Reads your subscriptions' limits and logs once, now")
+                .disabled(model.isRefreshing)
+            Button("Settings", action: openSettings)
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(palette.faint))
     }
 }

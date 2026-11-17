@@ -2,24 +2,21 @@ import AppKit
 import TinybarCore
 import SwiftUI
 
-/// Owns the NSStatusItem and the popover. Redraws the menu bar only when the Pinned Limit's
-/// displayed value changes; no timers or animations here.
+/// Owns the NSStatusItem and the popover. The menu bar shows the model gateway (ADR 0017): a
+/// template glyph from `GatewayMonitor`, redrawn only when what it shows changes.
 @MainActor
 final class StatusItemController: NSObject, NSPopoverDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
     private let model: AppModel
+    let monitor = GatewayMonitor()
     private var lastRendered: RenderKey?
-    private var appearanceObservation: NSKeyValueObservation?
     private lazy var stats = StatsWindowController(model: model)
 
     private struct RenderKey: Equatable {
-        var percent: Int?
-        var provider: ProviderID?
-        var stale: Bool
-        var hidePercent: Bool
-        var dark: Bool
-        var alert: Incident.Severity?
+        var glyph: GatewayGlyph.State
+        var text: String?
+        var spoken: String
     }
 
     init(model: AppModel) {
@@ -33,12 +30,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         if let button = statusItem.button {
             button.target = self
             button.action = #selector(togglePopover)
-            button.imagePosition = .imageOnly
-            // The ring is coloured, so it is not a template image: redraw when the menu bar
-            // switches between light and dark (wallpaper, appearance setting).
-            appearanceObservation = button.observe(\.effectiveAppearance) { [weak self] _, _ in
-                Task { @MainActor in self?.render() }
-            }
+            button.imagePosition = .imageLeading
         }
         render()
         observe()
@@ -50,6 +42,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             self?.popover.performClose(nil)
             self?.stats.show()
         }
+        monitor.start()
     }
 
     /// Re-renders whenever a value `render()` reads changes (Observation tracking, one-shot per change).
@@ -62,45 +55,21 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     }
 
     private func render() {
-        let pinned = model.pinned
-        let stale = model.isPinnedStale
         guard let button = statusItem.button else { return }
-        let showsUsed = model.settings.showsUsedPercentage
-        let key = RenderKey(
-            percent: pinned.map { Int(shownPercent(left: $0.1.remainingPercent, used: showsUsed).rounded()) },
-            provider: pinned?.0,
-            stale: stale,
-            hidePercent: model.settings.hidePercentage,
-            dark: button.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua,
-            alert: model.disruption?.severity)
-        let owner = model.pinnedAccount.map { " (\($0.displayName))" } ?? ""
-        var tip = pinned.map {
-            "\($0.0.displayName)\(owner) \($0.1.title): \(PercentText.phrase(left: $0.1.remainingPercent, used: showsUsed))"
-        }
-        if let incident = model.disruption {
-            tip = [tip, "\(incident.provider.displayName): \(incident.title)"].compactMap { $0 }.joined(separator: "\n")
-        }
-        button.toolTip = tip
-        // The image carries the incident's light; VoiceOver gets it from the label.
-        button.setAccessibilityLabel(tip)
-
+        let text = LocalModelsSettings.menuText() ? monitor.text : nil
+        let key = RenderKey(glyph: monitor.glyph, text: text, spoken: monitor.spoken)
+        _ = monitor.checks  // a fresh reading re-renders, so the text setting is picked up
         guard key != lastRendered else { return }
         lastRendered = key
-
-        // Ring and percentage are drawn as one image: a titled status item gets wider padding
-        // than an icon-only one, which left a visible gap to the neighbouring icon.
-        button.image = RingIcon.image(
-            fraction: key.percent.map { Double($0) / 100 },
-            label: key.hidePercent ? nil : key.percent.map { "\($0)%" },
-            tint: key.stale ? nil : key.provider.flatMap(RingIcon.tint),
-            dark: key.dark,
-            alert: key.alert?.nsColor)
-        button.title = ""
-        button.appearsDisabled = stale
+        button.image = GatewayGlyph.image(key.glyph)
+        button.title = text.map { " " + $0 } ?? ""
+        button.font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize - 1, weight: .regular)
+        button.toolTip = key.spoken
+        button.setAccessibilityLabel(key.spoken)
     }
 
     /// The SwiftUI tree is dropped on close and built again on the next open, so a closed popover
-    /// holds none of it.
+    /// holds none of it and asks nothing.
     func popoverDidClose(_ notification: Notification) {
         popover.contentViewController = nil
     }
@@ -109,11 +78,8 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         if popover.isShown {
             popover.performClose(nil)
         } else if let button = statusItem.button {
-            model.refreshOnOpen()
             if popover.contentViewController == nil {
-                let host = NSHostingController(rootView: PopoverView(model: model))
-                // Size the popover to the SwiftUI content; the default is a fixed 320×320 box
-                // that centers and clips the content.
+                let host = NSHostingController(rootView: ModelbarPopover(app: model, monitor: monitor))
                 host.sizingOptions = .preferredContentSize
                 popover.contentViewController = host
             }
@@ -129,6 +95,8 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
 @MainActor
 enum RingIcon {
     static let ringSize: CGFloat = 14
+    /// The filled centre that marks Modelbar's ring.
+    static let centreDot: CGFloat = 4.5
     static let spacing: CGFloat = 3
     static let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize - 1, weight: .regular)
 
@@ -200,6 +168,11 @@ enum RingIcon {
                     stroke(arc(center: center, radius: radius, sweep: sweep), color: ink, width: 2)
                 }
             }
+
+            // Modelbar's mark: a filled centre in the ring, so it never reads as upstream Tinybar's
+            // empty ring beside it in the menu bar.
+            ink.setFill()
+            NSBezierPath(ovalIn: NSRect(x: center.x - centreDot / 2, y: center.y - centreDot / 2, width: centreDot, height: centreDot)).fill()
 
             if let alert {
                 // Punch a gap into the ring so the light reads as its own mark, then draw it.

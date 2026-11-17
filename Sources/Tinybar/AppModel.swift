@@ -121,8 +121,11 @@ final class AppModel {
     // MARK: Lifecycle
 
     func start() {
+        // Off by default in Modelbar: no provider polling, no login reads, no alerts (ADR 0017).
+        guard settings.tracksSubscriptions else { return }
         notifier.requestAuthorizationOnce()
-        observeSleepAndLock()
+        if !observing { observeSleepAndLock() }
+        observing = true
         isLocked = (CGSessionCopyCurrentDictionary() as? [String: Any])?["CGSSessionScreenIsLocked"] as? Bool ?? false
         if !isLocked {
             schedulePoll()
@@ -157,7 +160,26 @@ final class AppModel {
         }
     }
 
+    private var observing = false
+
+    /// The Settings switch "Track coding subscriptions in Modelbar".
+    func setTracksSubscriptions(_ on: Bool) {
+        settings.tracksSubscriptions = on
+        if on {
+            start()
+        } else {
+            pollTimer?.invalidate()
+            pollTimer = nil
+        }
+    }
+
+    /// With tracking off: read them once, because the user asked.
+    func readSubscriptionsOnce() {
+        Task { await refresh(force: true) }
+    }
+
     private func setPaused(asleep: Bool? = nil, locked: Bool? = nil) {
+        guard settings.tracksSubscriptions else { return }
         let wasPaused = isAsleep || isLocked
         if let asleep { isAsleep = asleep }
         if let locked { isLocked = locked }
@@ -609,6 +631,12 @@ final class AppModel {
 
     /// Opens the Stats window; set by the status item, which owns the window and the popover.
     @ObservationIgnored var openStats: () -> Void = {}
+
+    /// Opens the main window on a page (the local models overview unless told otherwise).
+    func openLocalModels(_ page: WindowPage = .overview) {
+        UserDefaults.standard.set(page.rawValue, forKey: "windowPage")
+        openStats()
+    }
 
     /// Reads what the Stats window shows for a range. Only runs while that window is open; nothing
     /// is kept afterwards.
