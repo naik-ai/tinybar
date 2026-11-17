@@ -443,8 +443,17 @@ The proof scripts: `backend/proof/live_proof.py` (`calls`, `soak`, `unload`, `ev
 
 `.github/workflows/ci.yml` has a `backend` job beside the Swift job: on `macos-15` (MLX's wheels are
 Apple-silicon only) it installs uv 0.13.4, runs `uv sync --locked` in `backend/`, then
-`uv run --locked --offline pytest -q`. The suite loads no model and uses no network: `tests/conftest.py`
-refuses any connection that is not to this machine, and a test checks that it does.
+`uv run --locked --offline pytest -q -rf --maxfail=5`, within a 15-minute job limit. Each test has a 60 s
+timeout (pytest-timeout, in the dev group) that dumps every thread's stack, and a fake worker that has not
+reported its port within 8 s dumps its own stack into its log, which the gateway logs on a failed start. The
+suite loads no model and uses no network: `tests/conftest.py` refuses any connection that is not to this
+machine, and a test checks that it does. Nothing is skipped on the runner: the LaunchAgent tests fake
+`launchctl`, and the footprint test reads only its own process.
+
+The first CI runs hung because `http.server.HTTPServer.server_bind` calls `socket.getfqdn(host)`, a reverse
+DNS lookup that stalled on the runner, so no worker reported its port. Every server here (the gateway, the
+wrapper workers, the test worker) now uses `wire.LoopbackHTTPServer`, which skips that lookup; an offline Mac
+could have stalled the same way.
 
 ## Not built
 
