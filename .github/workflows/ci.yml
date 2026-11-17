@@ -29,7 +29,7 @@ jobs:
     # computation or network is used by the tests (tests/conftest.py refuses any non-loopback connection);
     # the network is only needed to install the locked packages. MLX's wheels are Apple-silicon only.
     runs-on: macos-15
-    timeout-minutes: 20
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: backend
@@ -40,5 +40,10 @@ jobs:
           version: "0.13.4"
       - name: Install the locked environment
         run: uv sync --locked
+      - name: Runner network settings (for diagnosis)
+        run: |
+          env | grep -i proxy || echo "no proxy variables"
+          scutil --proxy | head -20
+          python3 -c "import urllib.request; print('urllib proxies:', urllib.request.getproxies())"
       - name: Test
-        run: uv run --locked --offline pytest -q
+        run: uv run --locked --offline pytest -q -rf --maxfail=5

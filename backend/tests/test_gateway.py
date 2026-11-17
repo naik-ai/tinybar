@@ -53,6 +53,7 @@ def make_data(budgets: dict, total: int, overrides: dict | None = None) -> dict:
     data = copy.deepcopy(registry.load())
     base = registry.model(data, "qwen3.5-4b")
     data["memoryBudgetTotalMb"] = total
+    data["defaults"]["readyTimeoutSeconds"] = 20  # a fake worker is ready in well under a second
     data["models"] = []
     for name, budget in budgets.items():
         m = copy.deepcopy(base)
@@ -124,6 +125,11 @@ class Harness:
             time.sleep(0.02)
 
     def close(self):
+        # Shown by pytest only when the test failed: what each worker printed, and the gateway's own log.
+        for p in sorted(paths.logs(self.env).glob("*.log*")):
+            text = p.read_text(errors="replace")
+            if text.strip():
+                print(f"--- {p.name} ---\n{text[-4000:]}")
         self.manager.shutdown()
         self.server.shutdown()
         self.server.server_close()
@@ -1147,7 +1153,7 @@ def test_model_fields_for_the_ui(harness):
         assert key in a  # existing fields stay
     assert a["phase"] == "loaded" and a["server"] == {"kind": "mlx-vlm", "maxTokens": 8192}
     assert a["licence"]["commercialUse"] == "allowed" and a["licence"]["id"] and a["licence"]["readFrom"]
-    assert a["capabilities"]["imageInput"] is True and a["readyTimeoutSeconds"] == 600
+    assert a["capabilities"]["imageInput"] is True and a["readyTimeoutSeconds"] == 20  # the tests' registry default
     assert 595 <= a["idleSecondsLeft"] <= 600 and a["pinnedBy"] is None and a["lastError"] is None
     w = a["weights"]
     assert w["reused"] is True and w["verifiedAt"] and w["filesVerified"] == 0 and w["download"] == "mlx"
