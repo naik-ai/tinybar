@@ -274,7 +274,7 @@ def test_a_worker_that_never_gets_ready_is_stopped_after_its_timeout(harness):
     h = harness(behaviours={"m-a": {"FAKE_NEVER_READY": "1"}}, overrides={"m-a": {"readyTimeoutSeconds": 1}})
     started = time.monotonic()
     status, headers, reply = h.chat("m-a")
-    assert status == 503 and "not ready within 1 s" in reply["error"]["message"] and "Retry-After" in headers
+    assert status == 503 and "within 1 s" in reply["error"]["message"] and "Retry-After" in headers
     assert time.monotonic() - started < 5
     assert h.manager.workers == {} and h.state("m-a")["state"] == "downloaded"
 

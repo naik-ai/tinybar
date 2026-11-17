@@ -32,6 +32,9 @@ from tinybar_models import wire
 
 
 def main():
+    import faulthandler
+
+    faulthandler.dump_traceback_later(8, exit=False)  # stuck before reporting its port: its stack goes to its log
     p = argparse.ArgumentParser()
     p.add_argument("--name", required=True)
     p.add_argument("--port", type=int, required=True)
@@ -131,6 +134,7 @@ def main():
 
     server = ThreadingHTTPServer(("127.0.0.1", args.port), H)
     wire.report_port(server.server_address[1])
+    faulthandler.cancel_dump_traceback_later()
     server.serve_forever()
 
 
